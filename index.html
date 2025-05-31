@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html>
+
+
+<body>
+  <canvas id="canvasMain" width="1600" height="1000" style="
+        touch-action: none;
+        -ms-touch-action: none;
+        width: 160vh;
+        height: 100vh;
+        position: absolute;
+        top: 0%;
+        left: 0%;
+        background: rgb(0, 0, 0);
+      ">
+  </canvas>
+</body>
+<script>
+  var to = (obj, to, speed = 1) => {
+    var D = Math.sqrt((to.x - obj.x) ** 2 + (to.y - obj.y) ** 2);
+    if (D > speed) {
+      return [(speed * (to.x - obj.x)) / D, (speed * (to.y - obj.y)) / D]; //x,y
+    } else {
+      return [0, 0];
+    }
+  };
+  var toAngle = (x, y) => {
+    return Math.atan(y / x) / (Math.PI / 180) + (x < 0 ? 180 : 0);
+  };
+  var makeAngle = (angle, speed = 10) => {
+    const x = speed * Math.cos(angle * (Math.PI / 180));
+    const y = speed * Math.sin(angle * (Math.PI / 180));
+    return { x: x, y: y };
+  };
+  var range = (n) => {
+    return [...Array(n).keys()];
+  };
+  var random = (max, min) => {
+    return Math.floor(Math.random() * (max - min)) + min;
+  };
+  class Keyboard {
+    constructor() {
+      this.keyboard = {};
+      this.keycodes = {};
+      var n;
+      for (n of `QAZWSXEDCRFVTGBYHNUJMIKOLP`.split("")) {
+        this.keycodes[`Key${n}`] = n;
+      }
+      for (n of `Up/Down/Left/Right`.split("/")) {
+        this.keycodes[`Arrow${n}`] = n;
+      }
+      for (n of `Space/Enter`.split("/")) {
+        this.keycodes[`${n}`] = n;
+      }
+      for (n of Object.values(this.keycodes)) {
+        this.keyboard[n] = false;
+      }
+      document.addEventListener("keydown", (e) => {
+        if (Object.keys(this.keycodes).includes(e.code)) {
+          this.keyboard[
+            Object.keys(this.keyboard)[
+            Object.keys(this.keycodes).indexOf(e.code)
+            ]
+          ] = true;
+        }
+      });
+      document.addEventListener("keyup", (e) => {
+        if (Object.keys(this.keycodes).includes(e.code)) {
+          this.keyboard[
+            Object.keys(this.keyboard)[
+            Object.keys(this.keycodes).indexOf(e.code)
+            ]
+          ] = false;
+        }
+      });
+    }
+    get() {
+      return this.keyboard;
+    }
+  }
+  class Mouse {
+    constructor() {
+      this.main = document.getElementById("canvasMain");
+      this.mouse = {
+        x: 0,
+        y: 0,
+        w: 1 / 9999 ** 99999,
+        h: 1 / 9999 ** 99999,
+        click: false,
+        endP: [1 / 9999 ** 99999, 1 / 9999 ** 99999],
+        startP: [1 / 9999 ** 99999, 1 / 9999 ** 99999],
+      };
+      this.mouseposition = (e) => {
+        if (this.pId == e.pointerId) {
+          this.mouse.x =
+            this.mouse.endP[0] =
+            this.mouse.startP[0] =
+            (e.clientX / this.main.getBoundingClientRect().width) *
+            1.6 *
+            100;
+          this.mouse.y =
+            this.mouse.endP[1] =
+            this.mouse.startP[1] =
+            (e.clientY / this.main.getBoundingClientRect().height) * 100;
+        }
+      };
+      this.pId;
+      this.another = () => { };
+      this.main.addEventListener("pointermove", this.mouseposition);
+      this.main.addEventListener("pointerdown", (e) => {
+        if (this.mouse.click == false) {
+          this.pId = e.pointerId;
+          this.mouseposition(e);
+        }
+      });
+      this.main.addEventListener("pointerdown", (e) => {
+        this.mouse.click = true;
+      });
+      this.main.addEventListener("pointerup", (e) => {
+        if (this.pId == e.pointerId) {
+          this.mouse.click = false;
+        }
+      });
+      this.main.addEventListener("pointerleave", (e) => {
+        if (this.pId == e.pointerId) {
+          this.mouse.click = false;
+        }
+      });
+    }
+    get() {
+      return this.mouse;
+    }
+  }
+  var keyboard = new Keyboard(), mouse = new Mouse()
+  function distancePointLine(A, B, P) {
+    const ax = A.x,
+      ay = A.y;
+    const bx = B.x,
+      by = B.y;
+    const px = P.x,
+      py = P.y;
+
+
+    // ベクトルABとAP
+    const abx = bx - ax;
+    const aby = by - ay;
+    const apx = px - ax;
+    const apy = py - ay;
+
+
+    // ベクトルABの長さの二乗
+    const abLenSq = abx * abx + aby * aby;
+
+
+    if (abLenSq === 0) {
+      // AとBが同じ点の場合、点PとAとの距離
+      return Math.hypot(apx, apy);
+    }
+
+
+    // 射影のスカラー値（0 <= t <= 1 なら線分AB上にある）
+    let t = (apx * abx + apy * aby) / abLenSq;
+
+
+    // 線分上に制限
+    t = Math.max(0, Math.min(1, t));
+
+
+    // 線分AB上の最近点Q
+    const qx = ax + t * abx;
+    const qy = ay + t * aby;
+
+
+    // 点PとQの距離
+    const dx = px - qx;
+    const dy = py - qy;
+
+
+    return Math.hypot(dx, dy);
+  }
+  ok = console.log;
+  var expansionLate = 10;
+  var ctx = document.getElementById("canvasMain").getContext("2d");
+  var box = (x, y, w, h, s = 0, color = "rgb(255,255,255)") => {
+    return {
+      x: x,
+      y: y,
+      w: w,
+      h: h,
+      s: s,
+      get draw() {
+        ctx.save();
+        ctx.translate(this.x * expansionLate, this.y * expansionLate);
+        ctx.rotate((this.s * Math.PI) / 180);
+        ctx.fillStyle = color;
+        ctx.fillRect(
+          (-this.w * expansionLate) / 2,
+          (-this.h * expansionLate) / 2,
+          this.w * expansionLate,
+          this.h * expansionLate,
+        );
+        ctx.restore();
+      },
+      type: "box",
+      get point() {
+        var rad = (this.s * Math.PI) / 180;
+        var cos = Math.cos(rad);
+        var sin = Math.sin(rad);
+        var hw = this.w / 2;
+        var hh = this.h / 2;
+        var corners = [
+          { name: "a", dx: -hw, dy: -hh },
+          { name: "b", dx: hw, dy: -hh },
+          { name: "c", dx: hw, dy: hh },
+          { name: "d", dx: -hw, dy: hh },
+        ];
+        var rotated = {};
+        for (var corner of corners) {
+          var rx = corner.dx * cos - corner.dy * sin;
+          var ry = corner.dx * sin + corner.dy * cos;
+          rotated[corner.name] = {
+            x: this.x + rx,
+            y: this.y + ry,
+          };
+        }
+        return rotated;
+      },
+    };
+  };
+  var circle = (x, y, r, color = "rgb(255,255,255)") => {
+    return {
+      x: x,
+      y: y,
+      r: r,
+      get draw() {
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.arc(
+          this.x * expansionLate,
+          this.y * expansionLate,
+          this.r * expansionLate,
+          0,
+          2 * Math.PI,
+        );
+        ctx.closePath();
+        ctx.fill()
+      },
+      type: "circle",
+    };
+  };
+  var colLineLine = (ax, ay, bx, by, cx, cy, dx, dy) => {
+    var ta = (cx - dx) * (ay - cy) + (cy - dy) * (cx - ax);
+    var tb = (cx - dx) * (by - cy) + (cy - dy) * (cx - bx);
+    var tc = (ax - bx) * (cy - ay) + (ay - by) * (ax - cx);
+    var td = (ax - bx) * (dy - ay) + (ay - by) * (ax - dx);
+    return tc * td < 0 && ta * tb < 0;
+  };
+  var colCircleCircle = (a, b) => {
+    var c = a.x - b.x
+    var d = a.y - b.y
+    var r = a.r + b.r
+    return ((Math.sqrt((c * c) + (d * d))) < r)
+  }
+  var col = (a, b) => {
+    if (a.type == b.type && a.type == "box") {
+      var n, m, n2, m2;
+      var A = a.point;
+      var B = b.point;
+      for (n of Object.values(A)) {
+        for (n2 of Object.values(A)) {
+          if (!(n == n2)) {
+            for (m of Object.values(B)) {
+              for (m2 of Object.values(B)) {
+                if (!(m == m2)) {
+                  if (colLineLine(n.x, n.y, n2.x, n2.y, m.x, m.y, m2.x, m2.y))
+                    return true;
+                }
+              }
+            }
+          }
+        }
+      }
+      return false;
+    } else if (a.type == b.type && a.type == "circle") {
+      return colCircleCircle(a, b)
+    } else {
+      var n, m
+      var A = a.type == "box" ? a.point : b.point
+      var B = a.type == "box" ? b : a
+      for (n of Object.values(A)) {
+        for (n2 of Object.values(A)) {
+          if (!(n == n2)) {
+            if (distancePointLine(n, n2, B) < B.r) return true
+          }
+        }
+      }
+      return false;
+    }
+  };
+  class Controller {
+    constructor() {
+      this.defaultMouseX = 130;
+      this.defaultMouseY = 70;
+      this.beforeClick = true;
+      this.first = 10;
+      this.moveX = this.moveY = 0;
+      this.angle = 0;
+      this.distance = 0;
+      this.using = false;
+      this.moving = false;
+    } update() {
+      var first = false;
+      this.moving = false;
+      if (!this.beforeClick && mouse.get().click) {
+        this.defaultMouseX = mouse.get().x;
+        this.defaultMouseY = mouse.get().y;
+        this.using = true;
+        this.first = 10;
+      }
+      var keyFlag =
+        keyboard.get().Up ||
+        keyboard.get().Down ||
+        keyboard.get().Left ||
+        keyboard.get().Right ||
+        keyboard.get().W ||
+        keyboard.get().A ||
+        keyboard.get().S ||
+        keyboard.get().D;
+      var keyFlag2 =
+        keyboard.get().Space || keyboard.get().E || keyboard.get().Q;
+      var clickFlag = mouse.get().click && this.using;
+      this.first--;
+      if (
+        (clickFlag || keyFlag || keyFlag2) &&
+        (this.first != 9 || mouse.get().x > 80)
+      ) {
+        this.moving = true;
+        if (keyFlag) {
+          this.defaultMouseX = 130;
+          this.defaultMouseY = 70;
+          this.moveX = 0;
+          this.moveY = 0;
+          if (keyboard.get().Up || keyboard.get().W) {
+            this.moveY = 100;
+          }
+          if (keyboard.get().Down || keyboard.get().S) {
+            this.moveY = -100;
+          }
+          if (keyboard.get().Left || keyboard.get().A) {
+            this.moveX = 100;
+          }
+          if (keyboard.get().Right || keyboard.get().D) {
+            this.moveX = -100;
+          }
+        } else if (clickFlag) {
+          this.moveX = this.defaultMouseX - mouse.get().x;
+          this.moveY = this.defaultMouseY - mouse.get().y;
+        } else {
+          this.moveX = this.moveY = 0;
+        }
+        this.distance = Math.sqrt(this.moveX ** 2 + this.moveY ** 2);
+        if (this.distance > 20) {
+          this.moveX = (this.moveX * 20) / this.distance;
+          this.moveY = (this.moveY * 20) / this.distance;
+        }
+        if (this.distance < 1 || keyFlag2) {
+          if (keyFlag2 || this.first < 0) {
+            this.moveX = this.moveY = 0;
+            this.btn = true;
+          }
+          this.distance = 0;
+        } else {
+          this.btn = false;
+          this.first = 20;
+        }
+
+
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.beginPath();
+        ctx.arc(
+          this.defaultMouseX * expansionLate,
+          this.defaultMouseY * expansionLate,
+          20 * expansionLate,
+          0,
+          2 * Math.PI,
+        );
+        ctx.fill();
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.beginPath();
+        ctx.arc(
+          (this.defaultMouseX - this.moveX) * expansionLate,
+          (this.defaultMouseY - this.moveY) * expansionLate,
+          5 * expansionLate,
+          0,
+          2 * Math.PI,
+        );
+        ctx.fill();
+      } else {
+        this.moveX = this.moveY = 0;
+        this.using = false;
+        this.btn = false;
+        this.distance = 0;
+      }
+      this.angle = toAngle(this.moveX, this.moveY);
+      this.beforeClick = mouse.get().click;
+
+
+      this.btn =
+        this.btn ||
+        (!this.using &&
+          ((mouse.get().x < 80 && mouse.get().click) ||
+            keyboard.get().Space ||
+            keyboard.get().Q ||
+            keyboard.get().E));
+    }
+  }
+  var controller = new Controller();
+  var objects, playing,fps=60
+  var flame = 0
+  var update = () => {
+    if (flame == 0) {
+      ok(
+        col(objects[0], objects[1]),
+        col(objects[0], objects[2]),
+        col(objects[0], objects[3]),
+        col(objects[4], objects[5]),
+        col(objects[4], objects[6]),
+        col(objects[4], objects[7]),
+        col(objects[4], objects[0]),
+      );
+    }
+  }
+  (() => {
+    objects = [
+      box(80, 50, 10, 10),
+      box(85, 55, 10, 10, 0, "rgb(255,0,0)"),
+      box(80, 35, 10, 10, 0, "rgb(0,255,0)"),
+      box(68.5, 50, 10, 10, 45, "rgb(0,0,255)"),
+      circle(30, 50, 5,),
+      circle(37, 52, 5, "rgb(0,0,255)"),
+      circle(30, 65, 5, "rgb(255,0,0)"),
+      box(25, 44, 10, 10, 0, "rgb(0,255,0)"),
+    ];
+    playing = true
+    flame = 0
+    var U1 = () => {
+      ctx.fillStyle = "rgb(0,0,0)"
+      ctx.fillRect(0, 0, 160 * expansionLate, 100 * expansionLate)
+      controller.update()
+      objects.forEach((n) => {
+        n.draw;
+      });
+      update();
+      if (playing) setTimeout(U1, 1000 / fps);
+      flame++
+    };
+    U1();
+  })();
+</script>
+
+
+</html>
+
+
